@@ -552,7 +552,7 @@
 
             resultsContainer.classList.remove('active');
 
-            setTimeout(() => {
+            setTimeout(async () => {  // Make this async
                 resultsDiv.innerHTML = '';
                 summaryDiv.innerHTML = `
                     <div class="loading-state">
@@ -561,92 +561,92 @@
                     </div>
                 `;
                 resultsContainer.classList.add('active');
+
+                try {
+                    const response = await fetch(`/api/compare/${country}`);
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    const data = await response.json();
+
+                    if (!data.separate_tables || !data.partitioned) {
+                        throw new Error('Invalid data structure from API');
+                    }
+
+                    const isSeparateTablesFaster = data.separate_tables.duration_ms < data.partitioned.duration_ms;
+
+                    resultsDiv.innerHTML = `
+                        <div class="result-card ${isSeparateTablesFaster ? 'recommended' : ''}">
+                            <div class="result-header">
+                                <div class="result-title">Separate Tables</div>
+                                ${isSeparateTablesFaster ? '<span class="badge">Recommended</span>' : ''}
+                            </div>
+                            <div class="metric">
+                                <span class="metric-label">Query Time</span>
+                                <span class="metric-value ${isSeparateTablesFaster ? 'highlight' : ''}">${data.separate_tables.duration_ms} ms</span>
+                            </div>
+                            <div class="metric">
+                                <span class="metric-label">Table Used</span>
+                                <span class="metric-value">${data.separate_tables.table_used}</span>
+                            </div>
+                            <div class="metric">
+                                <span class="metric-label">Results Found</span>
+                                <span class="metric-value">${data.separate_tables.results_count}</span>
+                            </div>
+                        </div>
+
+                        <div class="result-card">
+                            <div class="result-header">
+                                <div class="result-title">Separate Databases</div>
+                            </div>
+                            <div class="note-placeholder">
+                                <p><strong>Not shown in demo</strong></p>
+                                <p>${data.separate_databases_note}</p>
+                            </div>
+                        </div>
+
+                        <div class="result-card ${!isSeparateTablesFaster ? 'recommended' : ''}">
+                            <div class="result-header">
+                                <div class="result-title">Partitioned Table</div>
+                                ${!isSeparateTablesFaster ? '<span class="badge">Recommended</span>' : ''}
+                            </div>
+                            <div class="metric">
+                                <span class="metric-label">Query Time</span>
+                                <span class="metric-value ${!isSeparateTablesFaster ? 'highlight' : ''}">${data.partitioned.duration_ms} ms</span>
+                            </div>
+                            <div class="metric">
+                                <span class="metric-label">Partition Used</span>
+                                <span class="metric-value">${data.partitioned.partition_used}</span>
+                            </div>
+                            <div class="metric">
+                                <span class="metric-label">Results Found</span>
+                                <span class="metric-value">${data.partitioned.results_count}</span>
+                            </div>
+                        </div>
+                    `;
+
+                    const difference = Math.abs(data.separate_tables.duration_ms - data.partitioned.duration_ms);
+                    const percentage = ((difference / Math.max(data.separate_tables.duration_ms, data.partitioned.duration_ms)) * 100).toFixed(1);
+
+                    summaryDiv.innerHTML = `
+                        <div class="comparison-summary">
+                            <h3>Performance Analysis: ${data.country}</h3>
+                            <p>Separate Tables: <strong>${data.separate_tables.duration_ms}ms</strong> | Partitioned: <strong>${data.partitioned.duration_ms}ms</strong></p>
+                            <p style="margin-top: 12px; font-size: 14px; opacity: 0.9;">Difference: ${difference}ms (${percentage}%)</p>
+                        </div>
+                    `;
+                } catch (error) {
+                    console.error('Error details:', error);
+                    resultsDiv.innerHTML = '';
+                    summaryDiv.innerHTML = `
+                        <div class="error-state">
+                            <strong>Error running comparison</strong>
+                            <p>${error.message}</p>
+                            <p class="error-state-detail">Check browser console for more details</p>
+                        </div>
+                    `;
+                }
             }, 150);
-
-            try {
-                const response = await fetch(`/api/compare/${country}`);
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
-                const data = await response.json();
-
-                if (!data.separate_tables || !data.partitioned) {
-                    throw new Error('Invalid data structure from API');
-                }
-
-                const isSeparateTablesFaster = data.separate_tables.duration_ms < data.partitioned.duration_ms;
-
-                resultsDiv.innerHTML = `
-                    <div class="result-card ${!isSeparateTablesFaster ? 'recommended' : ''}">
-                        <div class="result-header">
-                            <div class="result-title">Separate Tables</div>
-                            ${!isSeparateTablesFaster ? '<span class="badge">Recommended</span>' : ''}
-                        </div>
-                        <div class="metric">
-                            <span class="metric-label">Query Time</span>
-                            <span class="metric-value ${!isSeparateTablesFaster ? 'highlight' : ''}">${data.separate_tables.duration_ms} ms</span>
-                        </div>
-                        <div class="metric">
-                            <span class="metric-label">Table Used</span>
-                            <span class="metric-value">${data.separate_tables.table_used}</span>
-                        </div>
-                        <div class="metric">
-                            <span class="metric-label">Results Found</span>
-                            <span class="metric-value">${data.separate_tables.results_count}</span>
-                        </div>
-                    </div>
-
-                    <div class="result-card">
-                        <div class="result-header">
-                            <div class="result-title">Separate Databases</div>
-                        </div>
-                        <div class="note-placeholder">
-                            <p><strong>Not shown in demo</strong></p>
-                            <p>${data.separate_databases_note}</p>
-                        </div>
-                    </div>
-
-                    <div class="result-card ${isSeparateTablesFaster ? 'recommended' : ''}">
-                        <div class="result-header">
-                            <div class="result-title">Partitioned Table</div>
-                            ${isSeparateTablesFaster ? '<span class="badge">Recommended</span>' : ''}
-                        </div>
-                        <div class="metric">
-                            <span class="metric-label">Query Time</span>
-                            <span class="metric-value ${isSeparateTablesFaster ? 'highlight' : ''}">${data.partitioned.duration_ms} ms</span>
-                        </div>
-                        <div class="metric">
-                            <span class="metric-label">Partition Used</span>
-                            <span class="metric-value">${data.partitioned.partition_used}</span>
-                        </div>
-                        <div class="metric">
-                            <span class="metric-label">Results Found</span>
-                            <span class="metric-value">${data.partitioned.results_count}</span>
-                        </div>
-                    </div>
-                `;
-
-                const difference = Math.abs(data.separate_tables.duration_ms - data.partitioned.duration_ms);
-                const percentage = ((difference / Math.max(data.separate_tables.duration_ms, data.partitioned.duration_ms)) * 100).toFixed(1);
-
-                summaryDiv.innerHTML = `
-                    <div class="comparison-summary">
-                        <h3>Performance Analysis: ${data.country}</h3>
-                        <p>Separate Tables: <strong>${data.separate_tables.duration_ms}ms</strong> | Partitioned: <strong>${data.partitioned.duration_ms}ms</strong></p>
-                        <p style="margin-top: 12px; font-size: 14px; opacity: 0.9;">Difference: ${difference}ms (${percentage}%)</p>
-                    </div>
-                `;
-            } catch (error) {
-                console.error('Error details:', error);
-                resultsDiv.innerHTML = '';
-                summaryDiv.innerHTML = `
-                    <div class="error-state">
-                        <strong>Error running comparison</strong>
-                        <p>${error.message}</p>
-                        <p class="error-state-detail">Check browser console for more details</p>
-                    </div>
-                `;
-            }
         }
 
         loadStats();
